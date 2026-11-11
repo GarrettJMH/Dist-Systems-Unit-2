@@ -10,7 +10,7 @@ while True:
   if difference > 0:
     # Create enough pods to make up the difference
 
-  if difference < 0:
+  elif difference < 0:
     # Delete enough pods to make up the difference
 
   else:
