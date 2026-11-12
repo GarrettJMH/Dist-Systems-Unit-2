@@ -1,17 +1,37 @@
-# Put your code here if python is chosen for this project.
+from kubernetes import config, client
+
+#connecting to the local cluster
+config.load_kube_config()
+
+#for accessing kube resources
+core = client.CoreV1API()
+
+#for acessing custom kube resources
+custom = client.CustomObjectsAPI()
+
+print("Listing pods with their IPs:")
+ret = core.list_pod_for_all_namespaces(watch=False)
+
+for _ in ret.items:
+  print(i.status.pod_ip, i.metadata.namespace, i.metadata.name)
 
 # Main loop
-while True:
-  desired = get_desired_count()
-  current = current_pod_count()
+def main():
 
-  difference = desired - current
+  
 
-  if difference > 0:
-    # Create enough pods to make up the difference
-
-  elif difference < 0:
-    # Delete enough pods to make up the difference
-
-  else:
-      print("Balanced.")
+  
+  while True:
+    desired = get_desired_count()
+    current = current_pod_count()
+  
+    difference = desired - current
+  
+    if difference > 0:
+      # Create enough pods to make up the difference
+  
+    elif difference < 0:
+      # Delete enough pods to make up the difference
+  
+    else:
+        print("Balanced.")
