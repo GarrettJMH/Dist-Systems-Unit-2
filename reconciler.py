@@ -4,10 +4,10 @@ from kubernetes import config, client
 config.load_kube_config()
 
 #for accessing kube resources
-core = client.CoreV1API()
+core = client.CoreV1Api()
 
 #for acessing custom kube resources
-custom = client.CustomObjectsAPI()
+custom = client.CustomObjectsApi()
 
 print("Listing pods with their IPs:")
 ret = core.list_pod_for_all_namespaces(watch=False)
