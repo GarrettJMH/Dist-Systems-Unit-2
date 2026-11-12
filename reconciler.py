@@ -12,7 +12,7 @@ custom = client.CustomObjectsApi()
 print("Listing pods with their IPs:")
 ret = core.list_pod_for_all_namespaces(watch=False)
 
-for _ in ret.items:
+for i in ret.items:
   print(i.status.pod_ip, i.metadata.namespace, i.metadata.name)
 
 # Main loop
