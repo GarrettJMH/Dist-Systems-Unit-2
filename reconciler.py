@@ -1,3 +1,4 @@
+import time
 from kubernetes import config, client
 from kubernetes.client.exceptions import ApiException
 
@@ -26,9 +27,7 @@ def get_resource():
     name="echo-service"  
   )
 
-# Grabbing required resource replica count
-def get_desired_count():
-  return resource["spec"]["replicas"]
+  return resource
 
 # Grabbing count of current pods
 def managed_pods():
@@ -83,7 +82,7 @@ def delete_pod(amount):
     if pod.metadata.deletion_timestamp is None and pod.status.phase in ("Pending", "Running")
   ]
 
-    for pod in pods.items[:amount]:
+    for pod in pods[:amount]:
         core.delete_namespaced_pod(
             name=pod.metadata.name,
             namespace="default"
@@ -100,15 +99,15 @@ def main():
     try:
       resource = get_resource()
       image = resource["spec"]["image"]
-      desired = get_desired_count()
+      desired = resource["spec"]["replicas"]
       current = current_pod_count()
     
       difference = desired - current
   
-      print(f"Status:"
-            f"Desired pod count: {desired}"
-            f"Current pod count: {current}"
-            f"Difference: {difference}"
+      print(f"\nStatus:\n"
+            f"Desired pod count: {desired}\n"
+            f"Current pod count: {current}\n"
+            f"Difference: {difference}\n"
            )
       
       if difference > 0:
@@ -121,12 +120,14 @@ def main():
   
       else:
           print("Balanced.")
-        
-    except Exception as e:
-      print(f"Error Occurred: {e}")
 
     except ApiException as e:
       print(f"Kubernetes error occurred: {e}")
+
+    except Exception as e:
+      print(f"Error Occurred: {e}")
+
+  time.sleep(2)
 
 if __name__ == "__main__":
   main()
