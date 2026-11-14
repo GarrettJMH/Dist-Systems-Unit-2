@@ -36,7 +36,7 @@ def managed_pods():
 
 def clean_terminals():
   for pod in managed_pods():
-    if pod.status.phase in ("Succeeded", "Failed"):
+    if pod.metadata.deletion_timestamp is None and pod.status.phase in ("Succeeded", "Failed"):
       core.delete_namespaced_pod(
         name=pod.metadata.name,
         namespace="default"
