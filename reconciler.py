@@ -224,7 +224,7 @@ def main():
     except Exception as e:
       print(f"Error Occurred: {e}")
 
-    event_marker.wait(timeout=2) # Wait for event before a recheck
+    event_marker.wait(timeout=15) # Wait for event before a recheck
 
 if __name__ == "__main__":
   main()
