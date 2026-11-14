@@ -1,5 +1,6 @@
 import time
-from kubernetes import config, client
+import threading
+from kubernetes import config, client, watch
 from kubernetes.client.exceptions import ApiException
 
 # Connecting to the local cluster
@@ -11,12 +12,7 @@ core = client.CoreV1Api()
 # For acessing custom kube resources
 custom = client.CustomObjectsApi()
 
-# Listing pods and ips (FOR TESTING)
-print("Listing pods with their IPs:")
-ret = core.list_pod_for_all_namespaces(watch=False)
-
-for i in ret.items:
-  print(i.status.pod_ip, i.metadata.namespace, i.metadata.name)
+event_marker = threading.Event()
 
 def get_resource():
   resource = custom.get_namespaced_custom_object(
@@ -37,6 +33,15 @@ def managed_pods():
   )
 
   return all_pods.items
+
+def clean_terminals():
+  for pod in managed_pods():
+    if pod.status.phase in ("Succeeded", "Failed"):
+      core.delete_namespaced_pod(
+        name=pod.metadata.name,
+        namespace="default"
+      )
+      print(f"Deleted pod {pod.metadata.name} due to terminal state: {pod.status.phase}")
 
 def current_pod_count():
   pods = managed_pods()
@@ -82,24 +87,104 @@ def delete_pod(amount):
     if pod.metadata.deletion_timestamp is None and pod.status.phase in ("Pending", "Running")
   ]
 
-    for pod in pods[:amount]:
-        core.delete_namespaced_pod(
-            name=pod.metadata.name,
-            namespace="default"
+  for pod in pods[:amount]:
+    core.delete_namespaced_pod(
+        name=pod.metadata.name,
+        namespace="default"
+    )
+
+    print(f"Deleted pod {pod.metadata.name}")
+
+def watch_pods():
+  resource_version = None
+
+  while True:
+    try:
+      if resource_version is None:
+        pod_list = core.list_namespaced_pod(
+          namespace="default",
+          label_selector="app.kubernetes.io/managed-by=echo-service"
+        )
+        resource_version = pod_list.metadata.resource_version
+        event_marker.set() # Initial event signal
+
+      w = watch.Watch()
+
+      for event in w.stream(
+        core.list_namespaced_pod,
+        namespace="default",
+        label_selector="app.kubernetes.io/managed-by=echo-service",
+        timeout_seconds=15
+      ):
+        resource_version = event['raw_object']['metadata']['resourceVersion']
+        print(f"Pod event: {event['type']}")
+        event_marker.set() # Event signal (for pods)
+
+    except ApiException as e:
+      print(f"Kubernetes API error in watch_pods: {e}")
+      time.sleep(2) # Wait for retry
+    
+    except Exception as e:
+      print(f"Error in watch_pods: {e}")
+      time.sleep(2) # Wait for retry
+
+def watch_resource():
+  while True:
+    resource_version = None
+
+    try:
+
+      if resource_version is None:
+        resource_list = custom.list_namespaced_custom_object(
+          group="cosc3657.tu.ca",
+          version="v1alpha1",
+          namespace="default",
+          plural="resilientdeployments"
         )
 
-      print(f"Deleted pod {pod.metadata.name}")
+        resource_version = resource_list["metadata"]["resourceVersion"]
+        event_marker.set() # Initial event signal
 
+      w = watch.Watch()
+
+      for event in w.stream(
+        custom.list_namespaced_custom_object,
+        group="cosc3657.tu.ca",
+        version="v1alpha1",
+        namespace="default",
+        plural="resilientdeployments",
+        timeout_seconds=15
+      ):
+        resource_version = event['raw_object']['metadata']['resourceVersion']
+        print(f"Resource event: {event['type']}")
+        event_marker.set() # Event signal (for resources)
+
+    except ApiException as e:
+      print(f"Kubernetes API error in watch_resource: {e}")
+      time.sleep(2) # Wait for retry
+
+    except Exception as e:
+      print(f"Error in watch_resource: {e}")
+      time.sleep(2) # Wait for retry
+
+    
   
 # Main running loop
 def main():
   print("Controller started")
+
+  threading.Thread(target=watch_pods, daemon=True).start()
+  threading.Thread(target=watch_resource, daemon=True).start()
   
   while True:
+
+    event_marker.clear() # Clear event before waiting for new ones
+
     try:
       resource = get_resource()
       image = resource["spec"]["image"]
       desired = resource["spec"]["replicas"]
+      clean_terminals()
       current = current_pod_count()
     
       difference = desired - current
@@ -127,7 +212,7 @@ def main():
     except Exception as e:
       print(f"Error Occurred: {e}")
 
-    time.sleep(2)
+    event_marker.wait() # Wait for event before a recheck
 
 if __name__ == "__main__":
   main()
