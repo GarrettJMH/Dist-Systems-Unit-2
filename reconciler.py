@@ -114,23 +114,31 @@ def watch_pods():
         core.list_namespaced_pod,
         namespace="default",
         label_selector="app.kubernetes.io/managed-by=echo-service",
-        timeout_seconds=15
+        timeout_seconds=15,
+        resource_version=resource_version
       ):
         resource_version = event['raw_object']['metadata']['resourceVersion']
         print(f"Pod event: {event['type']}")
         event_marker.set() # Event signal (for pods)
 
     except ApiException as e:
-      print(f"Kubernetes API error in watch_pods: {e}")
-      time.sleep(2) # Wait for retry
+
+      if e.status == 410:
+        resource_version = None # AI-suggested reset of resource version if version is too old
+
+      else:
+        print(f"Kubernetes API error in watch_pods: {e}")
+        time.sleep(2) # Wait for retry
     
     except Exception as e:
       print(f"Error in watch_pods: {e}")
       time.sleep(2) # Wait for retry
 
 def watch_resource():
+
+  resource_version = None
+
   while True:
-    resource_version = None
 
     try:
 
@@ -153,22 +161,26 @@ def watch_resource():
         version="v1alpha1",
         namespace="default",
         plural="resilientdeployments",
-        timeout_seconds=15
+        timeout_seconds=15,
+        resource_version=resource_version
       ):
         resource_version = event['raw_object']['metadata']['resourceVersion']
         print(f"Resource event: {event['type']}")
         event_marker.set() # Event signal (for resources)
 
     except ApiException as e:
-      print(f"Kubernetes API error in watch_resource: {e}")
-      time.sleep(2) # Wait for retry
+
+      if e.status == 410:
+        resource_version = None # AI-suggested reset of resource version if version is too old
+
+      else:
+        print(f"Kubernetes API error in watch_resource: {e}")
+        time.sleep(2) # Wait for retry
 
     except Exception as e:
       print(f"Error in watch_resource: {e}")
       time.sleep(2) # Wait for retry
 
-    
-  
 # Main running loop
 def main():
   print("Controller started")
@@ -212,7 +224,7 @@ def main():
     except Exception as e:
       print(f"Error Occurred: {e}")
 
-    event_marker.wait() # Wait for event before a recheck
+    event_marker.wait(timeout=2) # Wait for event before a recheck
 
 if __name__ == "__main__":
   main()
